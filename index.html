@@ -381,6 +381,9 @@
       .brand{min-width:auto}
       .brand-sub{display:none}
     }
+  #adminPanel {
+  display: none;
+  }
   </style>
 </head>
 
@@ -398,8 +401,10 @@
     <div class="search-wrap">
       <input id="searchInput" type="search" placeholder="Buscar por perfume o marca…" autocomplete="off" />
     </div>
+   <div id="adminPanel">
     <button id="importBtn" class="btn" type="button">IMPORTAR CATÁLOGO</button>
-    <button id="cartBtn" class="cart-btn" type="button" aria-label="Abrir carrito">
+   </div>
+     <button id="cartBtn" class="cart-btn" type="button" aria-label="Abrir carrito">
       <span aria-hidden="true">🛒</span>
       <span class="cart-count" id="cartCount">0</span>
     </button>
