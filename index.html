@@ -1084,6 +1084,27 @@ function init(){
   updateCartCount();
 }
 init();
+// ==========================
+// CARGAR CATALOGO AUTOMÁTICAMENTE
+// ==========================
+async function cargarCatalogoDesdeArchivo() {
+  try {
+    const respuesta = await fetch('./catalogo.txt', { cache: 'no-store' });
+    if (!respuesta.ok) return;
+    const texto = await respuesta.text();
+    if (!texto.trim()) return;
+
+    // Busca si existe una función que procesa el catálogo importado
+    if (typeof parseCatalog === 'function') parseCatalog(texto);
+    else if (typeof importarCatalogo === 'function') importarCatalogo(texto);
+    else if (typeof loadCatalog === 'function') loadCatalog(texto);
+    else console.warn('No se encontró la función para procesar el catálogo');
+  } catch (e) {
+    console.warn('No se pudo cargar catalogo.txt', e);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', cargarCatalogoDesdeArchivo);
 </script>
 </body>
 </html>
