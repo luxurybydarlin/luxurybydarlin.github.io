@@ -48,6 +48,9 @@
       font-weight:900;
       box-shadow: 0 10px 22px rgba(0,0,0,.28);
       user-select:none;
+      -webkit-user-select:none;
+      touch-action: manipulation;
+      cursor: default;
     }
     .brand-name{letter-spacing:.18em; font-weight:900; font-size:12px;}
     .brand-sub{color:var(--muted); font-size:12px; margin-top:2px}
@@ -239,6 +242,7 @@
       margin-top:8px;
       color: var(--muted);
       font-size:12px;
+      word-break: break-word;
     }
     .item-actions{
       display:flex;
@@ -381,16 +385,16 @@
       .brand{min-width:auto}
       .brand-sub{display:none}
     }
-  #adminPanel {
-  display: none;
-  }
+
+    /* Admin UI (oculto por defecto) */
+    #adminPanel{display:none;}
   </style>
 </head>
 
 <body>
 <header class="topbar">
   <div class="brand">
-    <div class="logo" aria-hidden="true">L</div>
+    <div class="logo" id="logo" aria-hidden="true" title="LUXURY BY DARLIN">L</div>
     <div class="brand-text">
       <div class="brand-name">LUXURY BY DARLIN</div>
       <div class="brand-sub">Catálogo • Carrito • Pedido por WhatsApp</div>
@@ -401,10 +405,12 @@
     <div class="search-wrap">
       <input id="searchInput" type="search" placeholder="Buscar por perfume o marca…" autocomplete="off" />
     </div>
-   <div id="adminPanel">
-    <button id="importBtn" class="btn" type="button">IMPORTAR CATÁLOGO</button>
-   </div>
-     <button id="cartBtn" class="cart-btn" type="button" aria-label="Abrir carrito">
+
+    <div id="adminPanel">
+      <button id="importBtn" class="btn" type="button" title="Solo admin">IMPORTAR CATÁLOGO</button>
+    </div>
+
+    <button id="cartBtn" class="cart-btn" type="button" aria-label="Abrir carrito">
       <span aria-hidden="true">🛒</span>
       <span class="cart-count" id="cartCount">0</span>
     </button>
@@ -436,14 +442,7 @@
       <div class="note-title">Pedidos</div>
       <p style="margin:0">Los precios se consultan vía WhatsApp. Agrega tus perfumes al carrito y envía el pedido.</p>
     </div>
-
-    <div class="note">
-      <div class="note-title">Importar catálogo</div>
-      <p style="margin:0">Formato:</p>
-      <p style="margin:8px 0 0;color:var(--muted);font-size:12px">
-        <b>Marca | Nombre | Tamaño | Género | Nota</b>
-      </p>
-    </div>
+    <!-- NOTA: Se eliminó la sección visible de "Importar catálogo" para clientes -->
   </aside>
 
   <section class="content">
@@ -514,8 +513,12 @@ Afnan | 9 AM Dive EDP | 100ml | Unisex | Consultar vía WhatsApp"></textarea>
       </label>
       <div class="row">
         <button id="doImport" class="btn primary" type="button">Importar</button>
-        <button id="clearCatalog" class="btn" type="button">Borrar catálogo</button>
+        <button id="clearCatalog" class="btn" type="button">Borrar catálogo (local)</button>
         <button id="exportCatalog" class="btn" type="button">Exportar (copiar)</button>
+        <button id="downloadCatalogTxt" class="btn" type="button">Descargar catalogo.txt</button>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        Tip admin: Para que TODOS vean el catálogo en cualquier teléfono, sube/reemplaza el archivo <b>catalogo.txt</b> en tu GitHub con el contenido descargado.
       </div>
     </div>
   </div>
@@ -525,13 +528,19 @@ Afnan | 9 AM Dive EDP | 100ml | Unisex | Consultar vía WhatsApp"></textarea>
 /* ===================== CONFIG ===================== */
 const WHATSAPP_NUMBER = "18294755065";
 const DEFAULT_NOTE = "Consultar vía WhatsApp";
-const LS_CATALOG = "LBD_CATALOG_TEXT_V1";
-const LS_CART = "LBD_CART_TEXT_V1";
+const LS_CATALOG = "LBD_CATALOG_V1";
+const LS_CART = "LBD_CART_V1";
+const CATALOG_TXT_PATH = "./catalogo.txt";
+
+/* Admin (nivel realista) */
+const ADMIN_SECRET = "Luxury 2026"; // contraseña exacta
+let isAdmin = false; // NO persistente (se apaga al recargar)
 
 /* ===================== UTILS ===================== */
 const el = (id)=>document.getElementById(id);
 const norm = (s)=> (s ?? "").toString().trim();
 const uniq = (arr)=> Array.from(new Set(arr)).filter(v=>v!=null && v!=="").sort((a,b)=>a.localeCompare(b,"es"));
+
 function slug(s){
   return norm(s).toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu,"-")
@@ -548,10 +557,9 @@ function parseMl(value){
 function splitPipes(line){
   return line.split(/[|｜¦│]/).map(p=>p.trim());
 }
-function safeText(s){ return (s ?? "").toString(); }
 
 /* ===================== STORAGE ===================== */
-function loadCatalog(){
+function loadCatalogLocal(){
   try{
     const raw = localStorage.getItem(LS_CATALOG);
     if(!raw) return [];
@@ -561,7 +569,7 @@ function loadCatalog(){
     return [];
   }
 }
-function saveCatalog(){
+function saveCatalogLocal(){
   localStorage.setItem(LS_CATALOG, JSON.stringify(ALL));
 }
 function loadCart(){
@@ -579,7 +587,7 @@ function saveCart(){
 }
 
 /* ===================== DATA / STATE ===================== */
-let ALL = loadCatalog();
+let ALL = loadCatalogLocal();
 let filtered = [];
 let cart = loadCart();
 
@@ -651,7 +659,7 @@ function renderBrands(){
 
   const sorted = sortCatalog(filtered);
   const groups = groupByBrand(sorted);
-
+  
   for(const [brand, items] of groups.entries()){
     const section = document.createElement("div");
     section.className = "brand-section";
@@ -852,6 +860,7 @@ function closeCart(){
   el("cartDrawer").classList.remove("open");
 }
 function openImport(){
+  if(!isAdmin) return;
   el("importModal").classList.remove("hidden");
   el("importModal").setAttribute("aria-hidden","false");
 }
@@ -866,8 +875,11 @@ function parseImport(text){
   const out = [];
   const seen = new Set();
 
+  let lineNo = 0;
   for(const line of lines){
+    lineNo++;
     if(!/[|｜¦│]/.test(line)) continue;
+
     const parts = splitPipes(line);
 
     // Formato requerido: Marca | Nombre | Tamaño | Género | Nota
@@ -876,7 +888,6 @@ function parseImport(text){
       const name = parts[1];
       const sizeText = parts[2];
       const gender = parts[3];
-      // Nota puede tener pipes extra; la rearmamos desde el 4 en adelante
       const note = parts.slice(4).join(" | ").trim();
 
       const size_ml = parseMl(sizeText);
@@ -900,6 +911,7 @@ function parseImport(text){
 }
 
 function doImportFromTextarea(){
+  if(!isAdmin) return;
   const text = el("importText").value;
   if(!norm(text)) return;
 
@@ -911,7 +923,7 @@ function doImportFromTextarea(){
   }
 
   ALL = sortCatalog(list);
-  saveCatalog();
+  saveCatalogLocal(); // respaldo local
   buildFilters();
   applyFilters();
 
@@ -924,26 +936,23 @@ function doImportFromTextarea(){
   updateCartCount();
   renderCart();
 
-  alert(`Importación lista: ${ALL.length} productos.`);
+  alert(`Importación lista: ${ALL.length} productos (guardado local). Si quieres que sea GLOBAL, usa "Descargar catalogo.txt" y súbelo a GitHub.`);
   closeImport();
 }
 
 function clearCatalogConfirm(){
-  const ok = confirm("¿Seguro que quieres borrar el catálogo? (Esto borra lo guardado en este dispositivo)");
+  if(!isAdmin) return;
+  const ok = confirm("¿Seguro que quieres borrar el catálogo LOCAL de este dispositivo?");
   if(!ok) return;
   ALL = [];
-  saveCatalog();
+  saveCatalogLocal();
   buildFilters();
   applyFilters();
 }
 
 function exportCatalogToClipboard(){
-  const lines = ALL.map(p=>{
-    const size = p.size_ml!=null ? `${p.size_ml}ml` : "";
-    const gender = p.gender || "Unisex";
-    const note = p.note || DEFAULT_NOTE;
-    return `${p.brand} | ${p.name} | ${size} | ${gender} | ${note}`;
-  }).join("\n");
+  if(!isAdmin) return;
+  const lines = catalogToTxt(ALL);
 
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(lines).then(()=>{
@@ -956,6 +965,62 @@ function exportCatalogToClipboard(){
     el("importText").value = lines;
     alert("Tu navegador no permite copiar automático. Te lo dejé en el cuadro para que lo copies manual.");
   }
+}
+
+/* ===================== CATALOG TXT (GLOBAL) ===================== */
+function catalogToTxt(list){
+  return list.map(p=>{
+    const size = p.size_ml!=null ? `${p.size_ml}ml` : "";
+    const gender = p.gender || "Unisex";
+    const note = p.note || DEFAULT_NOTE;
+    return `${p.brand} | ${p.name} | ${size} | ${gender} | ${note}`;
+  }).join("\n");
+}
+
+function downloadCatalogTxt(){
+  if(!isAdmin) return;
+  const content = catalogToTxt(ALL);
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "catalogo.txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+async function loadCatalogFromTxtRemote(){
+  try{
+    const res = await fetch(CATALOG_TXT_PATH, { cache: "no-store" });
+    if(!res.ok) return null;
+    const text = await res.text();
+    if(!text || !text.trim()) return null;
+
+    const list = parseImport(text);
+    if(!Array.isArray(list) || list.length===0) return null;
+
+    return sortCatalog(list);
+  }catch{
+    return null;
+  }
+}
+
+async function hydrateCatalog(){
+  // 1) intenta remoto (global)
+  const remote = await loadCatalogFromTxtRemote();
+  if(remote && remote.length){
+    ALL = remote;
+    // guardamos respaldo local, por si luego falla el fetch
+    saveCatalogLocal();
+    return;
+  }
+
+  // 2) fallback local (solo ese dispositivo)
+  ALL = sortCatalog(loadCatalogLocal());
 }
 
 /* ===================== WHATSAPP ===================== */
@@ -996,6 +1061,61 @@ function sendWhatsApp(){
   const msg = buildWhatsAppMessage();
   const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
   window.open(url, "_blank");
+}
+
+/* ===================== ADMIN (UNLOCK) ===================== */
+function showAdminUI(){
+  isAdmin = true;
+  el("adminPanel").style.display = "block";
+}
+function hideAdminUI(){
+  isAdmin = false;
+  el("adminPanel").style.display = "none";
+  closeImport();
+}
+
+function requestAdminUnlock(){
+  const clave = prompt("Introduce la clave secreta para activar el modo admin:");
+  if(clave === ADMIN_SECRET){
+    showAdminUI();
+    alert("Modo admin activado (se desactiva al recargar/cerrar).");
+  }else{
+    alert("Clave incorrecta.");
+  }
+}
+
+function checkAdminFromUrl(){
+  const params = new URLSearchParams(window.location.search);
+  const wantsAdmin = params.get("admin");
+  if(wantsAdmin === "1"){
+    requestAdminUnlock();
+  }
+}
+
+/* long-press en logo (5s) */
+function wireLogoLongPress(){
+  const logo = el("logo");
+  if(!logo) return;
+
+  let timer = null;
+  const start = (e)=>{
+    // evita selección rara
+    if(e && e.type === "contextmenu") e.preventDefault();
+    clearTimeout(timer);
+    timer = setTimeout(()=>{
+      requestAdminUnlock();
+    }, 5000);
+  };
+  const stop = ()=>{
+    clearTimeout(timer);
+    timer = null;
+  };
+
+  logo.addEventListener("pointerdown", start);
+  logo.addEventListener("pointerup", stop);
+  logo.addEventListener("pointercancel", stop);
+  logo.addEventListener("pointerleave", stop);
+  logo.addEventListener("contextmenu", (e)=> e.preventDefault());
 }
 
 /* ===================== EVENTS ===================== */
@@ -1064,6 +1184,11 @@ function wire(){
     exportCatalogToClipboard();
   });
 
+  el("downloadCatalogTxt").addEventListener("click", (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    downloadCatalogTxt();
+  });
+
   el("importModal").addEventListener("click", (e)=>{
     if(e.target === el("importModal")) closeImport();
   });
@@ -1073,60 +1198,26 @@ function wire(){
       closeImport();
     }
   });
+
+  wireLogoLongPress();
 }
+
 /* ===================== INIT ===================== */
-function init(){
+async function init(){
   wire();
-  ALL = sortCatalog(ALL);
+  hideAdminUI(); // por defecto
+
+  await hydrateCatalog();
+
   buildFilters();
   filtered = ALL.slice();
   applyFilters();
   updateCartCount();
+
+  checkAdminFromUrl();
 }
+
 init();
-// ==========================
-// CARGAR CATALOGO AUTOMÁTICAMENTE
-// ==========================
-async function cargarCatalogoDesdeArchivo() {
-  try {
-    const respuesta = await fetch('./catalogo.txt', { cache: 'no-store' });
-    if (!respuesta.ok) return;
-    const texto = await respuesta.text();
-    if (!texto.trim()) return;
-
-    // Busca si existe una función que procesa el catálogo importado
-    if (typeof parseCatalog === 'function') parseCatalog(texto);
-    else if (typeof importarCatalogo === 'function') importarCatalogo(texto);
-    else if (typeof loadCatalog === 'function') loadCatalog(texto);
-    else console.warn('No se encontró la función para procesar el catálogo');
-  } catch (e) {
-    console.warn('No se pudo cargar catalogo.txt', e);
-  }
-}
-
-window.addEventListener('DOMContentLoaded', cargarCatalogoDesdeArchivo);
-// ==========================
-// MODO ADMIN (solo para ti)
-// ==========================
-function activarModoAdmin() {
-  const clave = prompt('Introduce la clave secreta para activar el modo admin:');
-  if (clave === 'Darlin2026') { // ← puedes cambiar esta clave
-    document.getElementById('adminPanel').style.display = 'block';
-    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
-    localStorage.setItem('modo_admin', 'activado');
-    alert('Modo admin activado correctamente.');
-  } else {
-    alert('Clave incorrecta.');
-  }
-}
-
-// Si ya lo activaste antes en este dispositivo, lo recuerda:
-window.addEventListener('DOMContentLoaded', () => {
-  if (localStorage.getItem('modo_admin') === 'activado') {
-    document.getElementById('adminPanel').style.display = 'block';
-    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
-  }
-});
 </script>
 </body>
 </html>
