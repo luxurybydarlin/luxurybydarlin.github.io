@@ -1105,7 +1105,28 @@ async function cargarCatalogoDesdeArchivo() {
 }
 
 window.addEventListener('DOMContentLoaded', cargarCatalogoDesdeArchivo);
+// ==========================
+// MODO ADMIN (solo para ti)
+// ==========================
+function activarModoAdmin() {
+  const clave = prompt('Introduce la clave secreta para activar el modo admin:');
+  if (clave === 'Darlin2026') { // ← puedes cambiar esta clave
+    document.getElementById('adminPanel').style.display = 'block';
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+    localStorage.setItem('modo_admin', 'activado');
+    alert('Modo admin activado correctamente.');
+  } else {
+    alert('Clave incorrecta.');
+  }
+}
+
+// Si ya lo activaste antes en este dispositivo, lo recuerda:
+window.addEventListener('DOMContentLoaded', () => {
+  if (localStorage.getItem('modo_admin') === 'activado') {
+    document.getElementById('adminPanel').style.display = 'block';
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+  }
+});
 </script>
 </body>
 </html>
-```0
